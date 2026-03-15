@@ -294,6 +294,9 @@
             width: 100%;
             height: 360px;
         }
+        .coverage-panel {
+            margin-top: 24px;
+        }
         .insight-card {
             border-radius: 16px;
             padding: 16px;
@@ -473,6 +476,11 @@
                         <div class="hint" id="hintTotal">整体覆盖的数量</div>
                     </article>
                     <article class="stat-card">
+                        <div class="label" id="labelTop">头号出行企鹅</div>
+                        <div class="value" data-stat="topFriend">-</div>
+                        <div class="hint" id="hintTop">访问省份数最多的企鹅</div>
+                    </article>
+                    <article class="stat-card">
                         <div class="label" id="labelShared">重合省份</div>
                         <div class="value" data-stat="sharedProvinces">0</div>
                         <div class="hint" id="hintShared"> 两🐧以上去过 </div>
@@ -482,21 +490,24 @@
                         <div class="value" data-stat="lonelyProvinces">0</div>
                         <div class="hint" id="hintLonely">仅一🐧去过的省份</div>
                     </article>
-                    <article class="stat-card">
-                        <div class="label" id="labelTop">头号出行企鹅</div>
-                        <div class="value" data-stat="topFriend">-</div>
-                        <div class="hint" id="hintTop">访问省份数最多的企鹅</div>
-                    </article>
+
                 </div>
                 <div class="chart-card">
                     <h3 id="chartTitle" style="margin:0 0 10px;font-size:0.9rem;letter-spacing:0.08em;">每只企鹅覆盖省份</h3>
                     <div id="statChart"></div>
                 </div>
-                <div class="insight-card">
+                <!-- <div class="insight-card">
                     <div class="insight-summary" id="insightSummary">正在计算...</div>
                     <div id="insightList"></div>
-                </div>
+                </div> -->
             </article>
+        </section>
+        <section class="panel coverage-panel" id="coverageCard" style="display:none;">
+            <div class="panel-title">
+                <h2>省级覆盖率对比（城市维度）</h2>
+                <span class="tag">覆盖/重合</span>
+            </div>
+            <div id="provinceCoverageChart"></div>
         </section>
         <section class="table-section" id="tableSection" style="display:none;">
             <div class="panel province-table">
@@ -527,9 +538,15 @@
             city: { key: 'count', dir: 'desc' },
             province: { key: 'count', dir: 'desc' }
         };
+        const TOTAL_CITY_COUNT = 339;
+        const TOTAL_PROVINCE_COUNT = 34;
+        let provinceCityCounts = {};
+        let cityProvinceFromCsv = {};
+        let provinceCoverageData = [];
 
         const chart = echarts.init(document.getElementById('main'));
         const statChart = echarts.init(document.getElementById('statChart'));
+        const coverageChart = echarts.init(document.getElementById('provinceCoverageChart'));
         const modeButtons = document.querySelectorAll('[data-mode]');
         const mapPanel = document.querySelector('.map-panel');
         const tableSection = document.getElementById('tableSection');
@@ -537,6 +554,7 @@
         const heroChips = document.getElementById('heroChips');
         const friendToggleContainer = document.getElementById('friendToggles');
         const countButtons = document.querySelectorAll('.count-filter button');
+        const coverageCard = document.getElementById('coverageCard');
 
         function renderFriendToggles() {
             friendToggleContainer.innerHTML = friends.map(friend => {
@@ -642,16 +660,15 @@
                 lonelyHint.textContent = '仅一🐧去过的城市';
                 title.textContent = '每只企鹅覆盖城市';
                 if (tableTitle) tableTitle.textContent = '城市访问矩阵';
-            } 
-            // else {
-            //     totalLabel.textContent = '跨越省份';
-            //     sharedLabel.textContent = '重合省份';
-            //     topHint.textContent = '访问省份数最多的企鹅';
-            //     lonelyLabel.textContent = '独行省份';
-            //     lonelyHint.textContent = '仅一🐧去过的省份';
-            //     title.textContent = '每只企鹅覆盖省份';
-            //     if (tableTitle) tableTitle.textContent = '省份访问矩阵';
-            // }
+            } else {
+                totalLabel.textContent = '跨越省份';
+                sharedLabel.textContent = '重合省份';
+                topHint.textContent = '访问省份数最多的企鹅';
+                lonelyLabel.textContent = '独行省份';
+                lonelyHint.textContent = '仅一🐧去过的省份';
+                title.textContent = '每只企鹅覆盖省份';
+                if (tableTitle) tableTitle.textContent = '省份访问矩阵';
+            }
         }
 
         function updateDashboard() {
@@ -664,6 +681,12 @@
             renderInsights(stats, mode);
             renderTable(summary, mode);
             updateStatChart(stats, mode);
+            if (coverageCard) {
+                coverageCard.style.display = mode === 'city' && currentMode !== 'table' ? 'block' : 'none';
+            }
+            if (mode === 'city') {
+                updateProvinceCoverageChart();
+            }
         }
 
         function switchView() {
@@ -680,17 +703,27 @@
             const lines = text.split(/\r?\n/).filter(l => l.trim());
             const headers = lines[0].split(',').map(h => h.replace(/["\s]/g, '').trim());
             const cityIdx = headers.indexOf('行政区划名称');
+            const provinceIdx = headers.indexOf('所属省级行政区');
             const friendIndex = {};
             friends.forEach(friend => {
                 const idx = headers.indexOf(friend);
                 if (idx !== -1) friendIndex[friend] = idx;
             });
             const data = {};
+            const provinceCounts = {};
+            const cityProvince = {};
             for (let i = 1; i < lines.length; i++) {
                 const cols = lines[i].split(',');
                 if (cols.length <= cityIdx) continue;
                 const name = cols[cityIdx].replace(/["\s]/g, '');
                 if (!name) continue;
+                if (provinceIdx !== -1 && cols[provinceIdx] != null) {
+                    const provinceName = cols[provinceIdx].replace(/["\s]/g, '').trim();
+                    if (provinceName) {
+                        provinceCounts[provinceName] = (provinceCounts[provinceName] || 0) + 1;
+                        cityProvince[name] = provinceName;
+                    }
+                }
                 data[name] = {};
                 friends.forEach(friend => {
                     const idx = friendIndex[friend];
@@ -699,7 +732,11 @@
                     data[name][friend] = value.trim().toUpperCase() === 'Y';
                 });
             }
-            return data;
+            return {
+                cityVisit: data,
+                provinceCityCounts: provinceCounts,
+                cityProvinceFromCsv: cityProvince
+            };
         }
 
         function computeProvinceVisits(cityVisit) {
@@ -817,6 +854,38 @@
             return summary;
         }
 
+        function buildProvinceCoverageData(activeFriends) {
+            let counts = provinceCityCounts;
+            if (!Object.keys(counts).length && Object.keys(cityProvinceFromCsv).length) {
+                counts = Object.values(cityProvinceFromCsv).reduce((acc, province) => {
+                    if (!province) return acc;
+                    acc[province] = (acc[province] || 0) + 1;
+                    return acc;
+                }, {});
+            }
+            const data = [];
+            Object.entries(counts).forEach(([province, total]) => {
+                if (!total) return;
+                let visited = 0;
+                let shared = 0;
+                Object.entries(baseData || {}).forEach(([city, visits]) => {
+                    if (cityProvinceFromCsv[city] !== province) return;
+                    const count = activeFriends.reduce((sum, friend) => sum + (visits[friend] ? 1 : 0), 0);
+                    if (count >= 1) visited += 1;
+                    if (count >= 2) shared += 1;
+                });
+                const coverage = total ? visited / total : 0;
+                const overlap = total ? shared / total : 0;
+                data.push({ province, total, visited, shared, coverage, overlap });
+            });
+            return data.sort((a, b) => {
+                if (b.coverage !== a.coverage) return b.coverage - a.coverage;
+                if (b.total !== a.total) return b.total - a.total;
+                if (b.overlap !== a.overlap) return b.overlap - a.overlap;
+                return a.province.localeCompare(b.province, 'zh-CN');
+            });
+        }
+
         function generateStatSnapshot(summary) {
             const totalProvinces = summary.length;
             const sharedCount = summary.filter(item => item.count >= 2).length;
@@ -846,11 +915,19 @@
 
         function renderStatsCards(stats, mode = 'province') {
             const unit = mode === 'province' ? '省' : '市';
-            const setValue = (key, value) => {
+            const setValue = (key, value, useHtml = false) => {
                 const el = document.querySelector(`[data-stat="${key}"]`);
-                if (el) el.textContent = value;
+                if (!el) return;
+                if (useHtml) {
+                    el.innerHTML = value;
+                } else {
+                    el.textContent = value;
+                }
             };
-            setValue('totalProvinces', stats.totalProvinces);
+            const denom = mode === 'province' ? TOTAL_PROVINCE_COUNT : TOTAL_CITY_COUNT;
+            const percent = denom ? ((stats.totalProvinces / denom) * 100).toFixed(2) : '0.00';
+            const totalHtml = `${stats.totalProvinces} <span class="stat-sub">/ ${denom} (${percent}%)</span>`;
+            setValue('totalProvinces', totalHtml, true);
             setValue('sharedProvinces', stats.sharedCount);
             setValue('lonelyProvinces', stats.lonelyCount);
             setValue('topFriend', `${stats.topFriend.friend} · ${stats.topFriend.count} ${unit}`);
@@ -862,22 +939,22 @@
             const modeLabel = mode === 'province' ? '省份' : '地级市';
             const lonelyLabel = mode === 'province' ? '独行省份' : '独行城市';
             const lonelyText = stats.lonelyNames.length ? stats.lonelyNames.slice(0, 2).join(' / ') : `暂无${lonelyLabel}`;
-            summary.innerHTML = `共有 <strong>${stats.sharedCount}</strong> 个${modeLabel}被至少 2 只企鹅共同造访，${lonelyText}`;
-            if (!stats.topShared.length) {
-                container.innerHTML = '<p style="color: var(--text-subtle);">暂无数据。</p>';
-                return;
-            }
-            container.innerHTML = stats.topShared.map((item, index) => {
-                const friendLine = item.friends.join(' · ');
-                return `<div class="insight-item">
-                    <div class="insight-rank">${index + 1}</div>
-                    <div>
-                        <p class="insight-title">${item.name}</p>
-                        <p class="insight-value">${item.count} 只企鹅共同访问</p>
-                        <p class="insight-hint">${friendLine}</p>
-                    </div>
-                </div>`;
-            }).join('');
+            // summary.innerHTML = `共有 <strong>${stats.sharedCount}</strong> 个${modeLabel}被至少 2 只企鹅共同造访，${lonelyText}`;
+            // if (!stats.topShared.length) {
+            //     container.innerHTML = '<p style="color: var(--text-subtle);">暂无数据。</p>';
+            //     return;
+            // }
+            // container.innerHTML = stats.topShared.map((item, index) => {
+            //     const friendLine = item.friends.join(' · ');
+            //     return `<div class="insight-item">
+            //         <div class="insight-rank">${index + 1}</div>
+            //         <div>
+            //             <p class="insight-title">${item.name}</p>
+            //             <p class="insight-value">${item.count} 只企鹅共同访问</p>
+            //             <p class="insight-hint">${friendLine}</p>
+            //         </div>
+            //     </div>`;
+            // }).join('');
         }
 
         function renderTable(summary, mode = 'province') {
@@ -978,6 +1055,88 @@
             });
         }
 
+        function updateProvinceCoverageChart() {
+            const activeFriends = getActiveFriends();
+            provinceCoverageData = buildProvinceCoverageData(activeFriends);
+            if (!coverageChart || !provinceCoverageData.length) {
+                coverageChart && coverageChart.clear();
+                return;
+            }
+            const names = provinceCoverageData.map(item => item.province);
+            const coverageValues = provinceCoverageData.map(item => +(item.coverage * 100).toFixed(2));
+            const overlapValues = provinceCoverageData.map(item => +(item.overlap * 100).toFixed(2));
+            const height = Math.max(420, names.length * 20 + 100);
+            const chartEl = document.getElementById('provinceCoverageChart');
+            if (chartEl) {
+                chartEl.style.height = `${height}px`;
+            }
+            coverageChart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: params => {
+                        const coverage = params.find(p => p.seriesName === '跨越覆盖率');
+                        const overlap = params.find(p => p.seriesName === '重合覆盖率');
+                        const dataItem = provinceCoverageData[coverage?.dataIndex ?? 0];
+                        const base = dataItem ? `${dataItem.visited}/${dataItem.total}` : '';
+                        const shared = dataItem ? `${dataItem.shared}/${dataItem.total}` : '';
+                        return `${params[0].name}<br/>跨越覆盖率：${coverage?.value || 0}% (${base})<br/>重合覆盖率：${overlap?.value || 0}% (${shared})`;
+                    }
+                },
+                grid: { left: 140, right: 40, top: 10, bottom: 20, containLabel: true },
+                xAxis: {
+                    type: 'value',
+                    max: 100,
+                    axisLabel: { color: 'rgba(255,255,255,0.7)', formatter: '{value}%' },
+                    splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.08)' } }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: names,
+                    inverse: true,
+                    axisLabel: { color: '#fff' },
+                    axisTick: { show: false },
+                    axisLine: { show: false }
+                },
+                series: [
+                    {
+                        name: '跨越覆盖率',
+                        type: 'bar',
+                        data: coverageValues,
+                        barWidth: 14,
+                        itemStyle: {
+                            borderRadius: [0, 6, 6, 0],
+                            color: new echarts.graphic.LinearGradient(1, 0, 0, 0, [
+                                { offset: 0, color: 'rgba(51, 214, 255, 0.05)' },
+                                { offset: 0.6, color: 'rgba(51, 214, 255, 0.22)' },
+                                { offset: 1, color: 'rgba(51, 214, 255, 0.45)' }
+                            ])
+                        },
+                        z: 1
+                    },
+                    {
+                        name: '重合覆盖率',
+                        type: 'bar',
+                        data: overlapValues,
+                        barWidth: 14,
+                        barGap: '-100%',
+                        itemStyle: {
+                            borderRadius: [0, 6, 6, 0],
+                            shadowColor: 'rgba(51, 214, 255, 0.55)',
+                            shadowBlur: 12,
+                            color: new echarts.graphic.LinearGradient(1, 0, 0, 0, [
+                                { offset: 0, color: 'rgba(0, 255, 234, 0.4)' },
+                                { offset: 0.5, color: 'rgba(51, 214, 255, 0.85)' },
+                                { offset: 1, color: 'rgba(122, 255, 208, 1)' }
+                            ])
+                        },
+                        z: 2
+                    }
+                ]
+            });
+            coverageChart.resize();
+        }
+
         function buildMapData(data) {
             baseData = data;
             provinceVisit = computeProvinceVisits(data);
@@ -985,6 +1144,7 @@
                 city: buildSummary(baseData, window._cityFeatures),
                 province: buildSummary(provinceVisit, window._provinceFeatures)
             };
+            provinceCoverageData = buildProvinceCoverageData(getActiveFriends());
             updateDashboard();
             updateMap();
             updateHeroChips();
@@ -1100,7 +1260,10 @@
             window._cityFeatures = filteredCityGeo.features;
             window._provinceFeatures = provinceGeo.features;
             cityToProvince = buildCityToProvinceMap(window._cityFeatures, window._provinceFeatures);
-            const visitData = parseCSV(csvText);
+            const visitPayload = parseCSV(csvText);
+            const visitData = visitPayload.cityVisit || visitPayload;
+            provinceCityCounts = visitPayload.provinceCityCounts || {};
+            cityProvinceFromCsv = visitPayload.cityProvinceFromCsv || {};
             buildMapData(visitData);
         }).catch(err => {
             console.error('加载失败', err);
@@ -1109,6 +1272,7 @@
         window.addEventListener('resize', () => {
             chart.resize();
             statChart.resize();
+            coverageChart.resize();
         });
     </script>
 </body>
