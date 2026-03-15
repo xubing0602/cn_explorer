@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>中国旅行足迹指挥室</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #04050c;
+            --panel: rgba(2, 6, 20, 0.8);
+            --panel-border: rgba(49, 229, 255, 0.4);
+            --panel-strong: rgba(255, 255, 255, 0.08);
+            --accent: #10ffda;
+            --accent-strong: #ff0fe0;
+            --text-subtle: rgba(255, 255, 255, 0.68);
+        }
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at 10% 20%, #0d1f5c, transparent 45%),
+                        radial-gradient(circle at 80% 0%, #4a14ff, transparent 28%),
+                        linear-gradient(180deg, #020510 0%, #050914 60%, #04060c 100%);
+            color: #f5f5ff;
+            font-family: 'Space Grotesk', 'SF Pro Display', system-ui, sans-serif;
+        }
+        .page {
+            padding: 30px 48px 48px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .hero-panel {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .hero-panel h1 {
+            margin: 0;
+            font-size: clamp(36px, 3vw, 46px);
+            letter-spacing: 0.08em;
+        }
+        .hero-panel p {
+            margin: 8px 0 0;
+        }
+        .hero-panel .desc {
+            color: var(--text-subtle);
+            max-width: 640px;
+        }
+        .hero-panel .hero-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 280px;
+        }
+        .hero-controls .friends-grid {
+            cursor: default;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .hero-controls .mode-switch {
+            border: 1px solid var(--panel-border);
+            border-radius: 999px;
+            padding: 6px;
+            display: flex;
+            gap: 6px;
+            background: var(--panel-strong);
+        }
+        .mode-switch button {
+            border: none;
+            background: transparent;
+            color: var(--text-subtle);
+            padding: 6px 16px;
+            border-radius: 999px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .mode-switch button.active {
+            background: linear-gradient(135deg, #2ff7ff 0%, #ff4ef1 100%);
+            color: #04050c;
+            box-shadow: 0 8px 20px rgba(255, 78, 241, 0.4);
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
+            transition: border 0.3s ease, transform 0.3s ease;
+        }
+        .chip:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+        .chip.ghost {
+            border-style: dashed;
+            color: rgba(255, 255, 255, 0.5);
+        }
+        .friend-chip {
+            position: relative;
+            gap: 8px;
+            padding: 6px 14px 6px 8px;
+            background: rgba(4, 12, 26, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+            --friend-color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+        }
+        .friend-chip input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .friend-chip img {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            object-fit: cover;
+        }
+        .friend-chip span {
+            font-weight: 600;
+        }
+        .friend-chip.is-active {
+            border-color: var(--friend-color);
+            box-shadow: 0 0 16px rgba(255, 255, 255, 0.15), 0 0 30px var(--friend-color);
+        }
+        .filter-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .filter-title {
+            font-size: 0.75rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-subtle);
+        }
+        .count-filter {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .count-filter button {
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(10, 16, 30, 0.7);
+            color: rgba(255, 255, 255, 0.7);
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+        .count-filter button.active {
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.9), rgba(255, 68, 237, 0.9));
+            color: #03050d;
+            border-color: transparent;
+            box-shadow: 0 8px 20px rgba(0, 255, 255, 0.2);
+        }
+        .content-grid {
+            display: grid;
+            grid-template-columns: 2.2fr 1fr;
+            gap: 24px;
+        }
+        @media (max-width: 1100px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .panel {
+            background: var(--panel);
+            border-radius: 20px;
+            border: 1px solid var(--panel-border);
+            padding: 18px;
+            position: relative;
+            backdrop-filter: blur(24px);
+            box-shadow: 0 20px 40px rgba(2, 3, 22, 0.8);
+            overflow: hidden;
+        }
+        .panel::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+            border-radius: inherit;
+            pointer-events: none;
+        }
+        .panel-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .panel-title h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            letter-spacing: 0.08em;
+            font-weight: 500;
+        }
+        .panel-title .tag {
+            padding: 4px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        .map-panel {
+            min-height: 620px;
+            padding: 12px;
+        }
+        #main {
+            width: 100%;
+            height: 600px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: radial-gradient(circle at 30% 20%, rgba(0, 255, 240, 0.12), transparent 50%),
+                        radial-gradient(circle at 70% 80%, rgba(255, 0, 200, 0.12), transparent 55%),
+                        rgba(1, 4, 12, 0.9);
+        }
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .stat-card {
+            border-radius: 14px;
+            padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.02);
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 60%);
+            pointer-events: none;
+        }
+        .stat-card .label {
+            margin: 0;
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            color: var(--text-subtle);
+        }
+        .stat-card .value {
+            margin: 8px 0 0;
+            font-size: 2rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+        }
+        .stat-card .hint {
+            margin: 6px 0 0;
+            font-size: 0.75rem;
+            color: var(--text-subtle);
+        }
+        .chart-card {
+            margin-bottom: 18px;
+            border-radius: 16px;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.02);
+        }
+        #statChart {
+            width: 100%;
+            height: 220px;
+        }
+        .insight-card {
+            border-radius: 16px;
+            padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(3, 3, 12, 0.8);
+        }
+        .insight-summary {
+            font-size: 0.9rem;
+            color: var(--text-subtle);
+            margin-bottom: 12px;
+        }
+        .insight-item {
+            display: grid;
+            grid-template-columns: 40px 1fr;
+            gap: 12px;
+            align-items: center;
+            padding: 10px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .insight-item:first-child {
+            border-top: none;
+        }
+        .insight-rank {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+            font-weight: 600;
+        }
+        .insight-title {
+            margin: 0;
+            font-weight: 600;
+        }
+        .insight-value {
+            margin: 4px 0 0;
+            font-size: 0.9rem;
+            color: #fff;
+        }
+        .insight-hint {
+            margin: 2px 0 0;
+            font-size: 0.75rem;
+            color: var(--text-subtle);
+        }
+        .table-section {
+            margin-top: 24px;
+        }
+        .province-table {
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(4, 6, 15, 0.85);
+            padding: 16px;
+        }
+        .table-grid {
+            display: grid;
+            gap: 10px;
+        }
+        .table-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 3fr;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            font-size: 0.9rem;
+            color: var(--text-subtle);
+        }
+        .table-row:last-child {
+            border-bottom: none;
+        }
+        .table-head {
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: 0.75rem;
+        }
+        .table-row .province-name {
+            font-weight: 600;
+            color: #fff;
+        }
+        .tag {
+            display: inline-flex;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 0.75rem;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.05);
+            margin-right: 6px;
+        }
+        @media (max-width: 768px) {
+            body {
+                padding-bottom: 40px;
+            }
+            .page {
+                padding: 18px;
+            }
+            .stat-grid {
+                grid-template-columns: 1fr;
+            }
+            .table-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <header class="hero-panel">
+            <div>
+                <p class="eyebrow" style="letter-spacing:0.2em;font-size:0.85rem;">CN EXPLORER / FRIENDOPS</p>
+                <h1>中国旅行足迹指挥室</h1>
+                <p class="desc">指挥中心实时渲染我与三个朋友在中国各省/地级市的足迹，带有跨人交集、副本统计以及未来感的主题色。</p>
+                <div id="heroChips" class="hero-chips" style="margin-top:12px;"></div>
+            </div>
+            <div class="hero-controls">
+                <div class="friends-grid" id="friendToggles"></div>
+                <div class="mode-switch">
+                    <button data-mode="city" class="active">地级市</button>
+                    <button data-mode="province">省级</button>
+                    <button data-mode="table">表格</button>
+                </div>
+                <div class="filter-panel">
+                    <div class="filter-title">访问人数过滤</div>
+                    <div class="count-filter">
+                        <button data-count="0" class="active">0 人</button>
+                        <button data-count="1" class="active">1 人</button>
+                        <button data-count="2" class="active">2 人</button>
+                        <button data-count="3" class="active">3 人</button>
+                        <button data-count="4" class="active">4 人</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <section class="content-grid">
+            <article class="panel map-panel">
+                <div class="panel-title">
+                    <h2>互动地图</h2>
+                    <span class="tag">实时渲染</span>
+                </div>
+                <div id="main"></div>
+            </article>
+            <article class="panel">
+                <div class="panel-title">
+                    <h2>友谊统计</h2>
+                    <span class="tag">insights V2</span>
+                </div>
+                <div class="stat-grid">
+                    <article class="stat-card">
+                        <div class="label">跨越省份</div>
+                        <div class="value" data-stat="totalProvinces">0</div>
+                        <div class="hint">整体覆盖的省级单位数量</div>
+                    </article>
+                    <article class="stat-card">
+                        <div class="label">重合省份</div>
+                        <div class="value" data-stat="sharedProvinces">0</div>
+                        <div class="hint">被 2 位及以上朋友踩过</div>
+                    </article>
+                    <article class="stat-card">
+                        <div class="label">头号出行家</div>
+                        <div class="value" data-stat="topFriend">-</div>
+                        <div class="hint">访问省份数最多的朋友</div>
+                    </article>
+                    <article class="stat-card">
+                        <div class="label">独行省份</div>
+                        <div class="value" data-stat="lonelyProvinces">0</div>
+                        <div class="hint">仅 1 位朋友独占的省份</div>
+                    </article>
+                </div>
+                <div class="chart-card">
+                    <h3 style="margin:0 0 10px;font-size:0.9rem;letter-spacing:0.08em;">每位朋友覆盖省份</h3>
+                    <div id="statChart"></div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-summary" id="insightSummary">正在计算...</div>
+                    <div id="insightList"></div>
+                </div>
+            </article>
+        </section>
+        <section class="table-section" id="tableSection" style="display:none;">
+            <div class="panel province-table">
+                <div class="panel-title">
+                    <h2>省份访问矩阵</h2>
+                    <span class="tag">清单视图</span>
+                </div>
+                <div id="table"></div>
+            </div>
+        </section>
+    </div>
+    <script>
+        const friendMeta = {
+            Skipper: { color: '#35d6ff', avatar: 'avatar/Skipper.webp' },
+            Kowalski: { color: '#7cff6b', avatar: 'avatar/Kowalski.webp' },
+            Pirate: { color: '#ffb347', avatar: 'avatar/Private.webp' },
+            Rico: { color: '#ff5fa2', avatar: 'avatar/Rico.webp' }
+        };
+        const friends = Object.keys(friendMeta);
+        let baseData = null;
+        let provinceVisit = {};
+        let provinceSummary = [];
+        let currentMode = 'city';
+        let selectedCounts = new Set([0, 1, 2, 3, 4]);
+
+        const chart = echarts.init(document.getElementById('main'));
+        const statChart = echarts.init(document.getElementById('statChart'));
+        const modeButtons = document.querySelectorAll('[data-mode]');
+        const mapPanel = document.querySelector('.map-panel');
+        const tableSection = document.getElementById('tableSection');
+        const tableElement = document.getElementById('table');
+        const heroChips = document.getElementById('heroChips');
+        const friendToggleContainer = document.getElementById('friendToggles');
+        const countButtons = document.querySelectorAll('.count-filter button');
+
+        function renderFriendToggles() {
+            friendToggleContainer.innerHTML = friends.map(friend => {
+                const meta = friendMeta[friend];
+                return `<label class="chip friend-chip is-active" style="--friend-color:${meta.color}">
+                    <input type="checkbox" checked value="${friend}" class="friend-toggle">
+                    <img src="${meta.avatar}" alt="${friend}">
+                    <span>${friend}</span>
+                </label>`;
+            }).join('');
+        }
+
+        renderFriendToggles();
+        const friendInputs = friendToggleContainer.querySelectorAll('.friend-toggle');
+
+        modeButtons.forEach(btn => btn.addEventListener('click', () => {
+            currentMode = btn.dataset.mode;
+            modeButtons.forEach(b => b.classList.toggle('active', b === btn));
+            switchView();
+        }));
+
+        friendInputs.forEach(input => {
+            input.addEventListener('change', () => {
+                const label = input.closest('.friend-chip');
+                if (label) label.classList.toggle('is-active', input.checked);
+                updateMap();
+                updateHeroChips();
+            });
+        });
+
+        countButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const count = Number(button.dataset.count);
+                if (selectedCounts.has(count)) {
+                    selectedCounts.delete(count);
+                    button.classList.remove('active');
+                } else {
+                    selectedCounts.add(count);
+                    button.classList.add('active');
+                }
+                updateMap();
+            });
+        });
+
+        function getActiveFriends() {
+            const active = Array.from(friendInputs).filter(cb => cb.checked).map(cb => cb.value);
+            return active.length ? active : friends;
+        }
+
+        function updateHeroChips() {
+            const active = getActiveFriends();
+            if (!active.length) {
+                heroChips.innerHTML = '<span class="chip ghost">正在等待好友上线</span>';
+                return;
+            }
+            heroChips.innerHTML = active.map(friend => {
+                const meta = friendMeta[friend];
+                return `<span class="chip" style="border-color:${meta.color};">${friend}</span>`;
+            }).join('');
+        }
+
+        function switchView() {
+            const isTable = currentMode === 'table';
+            tableSection.style.display = isTable ? 'block' : 'none';
+            mapPanel.style.display = isTable ? 'none' : 'block';
+            if (!isTable) {
+                updateMap();
+            }
+        }
+
+        function parseCSV(text) {
+            const lines = text.split(/\r?\n/).filter(l => l.trim());
+            const headers = lines[0].split(',').map(h => h.replace(/["\s]/g, '').trim());
+            const cityIdx = headers.indexOf('行政区划名称');
+            const friendIndex = {};
+            friends.forEach(friend => {
+                const idx = headers.indexOf(friend);
+                if (idx !== -1) friendIndex[friend] = idx;
+            });
+            const data = {};
+            for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(',');
+                if (cols.length <= cityIdx) continue;
+                const name = cols[cityIdx].replace(/["\s]/g, '');
+                if (!name) continue;
+                data[name] = {};
+                friends.forEach(friend => {
+                    const idx = friendIndex[friend];
+                    if (idx == null) return;
+                    const value = cols[idx] || '';
+                    data[name][friend] = value.trim().toUpperCase() === 'Y';
+                });
+            }
+            return data;
+        }
+
+        function computeProvinceVisits(cityVisit) {
+            const prov = {};
+            const codeToProv = {};
+            const provinceNames = new Set();
+            window._provinceFeatures.forEach(feature => {
+                const properties = feature.properties || {};
+                if (properties.adcode && properties.name) {
+                    const key = Math.floor(properties.adcode / 10000) * 10000;
+                    codeToProv[key] = properties.name;
+                    provinceNames.add(properties.name);
+                }
+            });
+            window._allFeatures.forEach(feature => {
+                const cname = (feature.properties && feature.properties.name) || '';
+                const adcode = feature.properties && feature.properties.adcode;
+                if (!cname || !adcode) return;
+                const key = Math.floor(adcode / 10000) * 10000;
+                const pname = codeToProv[key];
+                if (!pname) return;
+                if (!prov[pname]) prov[pname] = emptyVisitRecord();
+                const cityVisits = cityVisit[cname] || {};
+                friends.forEach(friend => {
+                    if (cityVisits[friend]) {
+                        prov[pname][friend] = true;
+                    }
+                });
+            });
+            Object.entries(cityVisit).forEach(([name, visits]) => {
+                if (!provinceNames.has(name)) return;
+                if (!prov[name]) prov[name] = emptyVisitRecord();
+                friends.forEach(friend => {
+                    if (visits[friend]) {
+                        prov[name][friend] = true;
+                    }
+                });
+            });
+            return prov;
+        }
+
+        function emptyVisitRecord() {
+            return friends.reduce((acc, friend) => {
+                acc[friend] = false;
+                return acc;
+            }, {});
+        }
+
+        function hexToRgb(hex) {
+            const raw = hex.replace('#', '');
+            const full = raw.length === 3 ? raw.split('').map(c => c + c).join('') : raw;
+            const num = parseInt(full, 16);
+            return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+        }
+
+        function mixColors(colors) {
+            const total = colors.length || 1;
+            const sum = colors.reduce((acc, color) => {
+                const rgb = hexToRgb(color);
+                acc.r += rgb.r;
+                acc.g += rgb.g;
+                acc.b += rgb.b;
+                return acc;
+            }, { r: 0, g: 0, b: 0 });
+            return `rgb(${Math.round(sum.r / total)}, ${Math.round(sum.g / total)}, ${Math.round(sum.b / total)})`;
+        }
+
+        function colorForVisits(visits, activeFriends) {
+            const visited = activeFriends.filter(friend => visits[friend]);
+            if (!visited.length) return 'rgba(10, 14, 24, 0.95)';
+            if (visited.length === 1) return friendMeta[visited[0]].color;
+            return mixColors(visited.map(friend => friendMeta[friend].color));
+        }
+
+        function aggregateProvinceSummary(provinces) {
+            const summary = [];
+            Object.entries(provinces).forEach(([name, visits]) => {
+                const visitors = friends.filter(friend => visits[friend]);
+                if (!visitors.length) return;
+                summary.push({ name, count: visitors.length, friends: visitors });
+            });
+            return summary;
+        }
+
+        function generateStatSnapshot(summary) {
+            const totalProvinces = summary.length;
+            const sharedCount = summary.filter(item => item.count >= 2).length;
+            const lonelyList = summary.filter(item => item.count === 1);
+            const friendMap = friends.reduce((acc, friend) => { acc[friend] = []; return acc; }, {});
+            summary.forEach(item => {
+                item.friends.forEach(friend => friendMap[friend].push(item.name));
+            });
+            const ranking = friends.map(friend => ({ friend, count: friendMap[friend].length }));
+            const sortedRanking = [...ranking].sort((a, b) => b.count - a.count);
+            const topFriend = sortedRanking[0] || { friend: '-', count: 0 };
+            const topShared = [...summary].sort((a, b) => {
+                if (b.count !== a.count) return b.count - a.count;
+                return a.name.localeCompare(b.name, 'zh-CN');
+            }).slice(0, 3);
+            const lonelyNames = lonelyList.map(item => `${item.name} (${item.friends[0] || '-'})`);
+            return {
+                totalProvinces,
+                sharedCount,
+                lonelyCount: lonelyNames.length,
+                lonelyNames,
+                friendRanking: sortedRanking,
+                topFriend,
+                topShared
+            };
+        }
+
+        function renderStatsCards(stats) {
+            const setValue = (key, value) => {
+                const el = document.querySelector(`[data-stat="${key}"]`);
+                if (el) el.textContent = value;
+            };
+            setValue('totalProvinces', stats.totalProvinces);
+            setValue('sharedProvinces', stats.sharedCount);
+            setValue('lonelyProvinces', stats.lonelyCount);
+            setValue('topFriend', `${stats.topFriend.friend} · ${stats.topFriend.count} 省`);
+        }
+
+        function renderInsights(stats) {
+            const container = document.getElementById('insightList');
+            const summary = document.getElementById('insightSummary');
+            const lonelyText = stats.lonelyNames.length ? stats.lonelyNames.slice(0, 2).join(' / ') : '暂无独行省份';
+            summary.innerHTML = `共有 <strong>${stats.sharedCount}</strong> 个省份被至少 2 位朋友共同造访，${lonelyText}`;
+            if (!stats.topShared.length) {
+                container.innerHTML = '<p style="color: var(--text-subtle);">暂无数据。</p>';
+                return;
+            }
+            container.innerHTML = stats.topShared.map((item, index) => {
+                const friendLine = item.friends.join(' · ');
+                return `<div class="insight-item">
+                    <div class="insight-rank">${index + 1}</div>
+                    <div>
+                        <p class="insight-title">${item.name}</p>
+                        <p class="insight-value">${item.count} 位朋友共同访问</p>
+                        <p class="insight-hint">${friendLine}</p>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderTable(summary) {
+            const sorted = [...summary].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-CN'));
+            if (!sorted.length) {
+                tableElement.innerHTML = '<p style="color: var(--text-subtle);">暂无有效数据。</p>';
+                return;
+            }
+            const rows = sorted.map(item => {
+                const friendTags = item.friends.map(friend => `<span class="tag">${friend}</span>`).join('');
+                return `<div class="table-row">
+                    <div class="province-name">${item.name}</div>
+                    <div>${item.count}</div>
+                    <div>${friendTags}</div>
+                </div>`;
+            }).join('');
+            tableElement.innerHTML = `
+                <div class="table-grid">
+                    <div class="table-row table-head">
+                        <div>省份 / 直辖市</div>
+                        <div>人数</div>
+                        <div>朋友</div>
+                    </div>
+                    ${rows}
+                </div>`;
+        }
+
+        function updateStatChart(stats) {
+            statChart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: params => {
+                        const item = params[0];
+                        return `${item.name}<br/>${item.value} 省级单位`;
+                    }
+                },
+                grid: { left: 0, right: 12, bottom: 14, top: 20 },
+                xAxis: {
+                    type: 'category',
+                    data: stats.friendRanking.map(item => item.friend),
+                    axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.3)' } },
+                    axisLabel: { color: '#fff' }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLine: { show: false },
+                    splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.08)' } },
+                    axisLabel: { color: 'rgba(255, 255, 255, 0.7)' }
+                },
+                series: [{
+                    name: '覆盖省份',
+                    type: 'bar',
+                    data: stats.friendRanking.map(item => ({
+                        value: item.count,
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: friendMeta[item.friend].color },
+                                { offset: 1, color: 'rgba(6, 10, 22, 0.9)' }
+                            ])
+                        }
+                    })),
+                    barWidth: 28,
+                    itemStyle: { borderRadius: 8 },
+                    emphasis: {
+                        itemStyle: { color: '#ff30bc' }
+                    },
+                    markLine: {
+                        data: [{ type: 'average', name: '平均' }],
+                        lineStyle: { color: 'rgba(255, 255, 255, 0.4)' }
+                    }
+                }]
+            });
+        }
+
+        function buildMapData(data) {
+            baseData = data;
+            provinceVisit = computeProvinceVisits(data);
+            provinceSummary = aggregateProvinceSummary(provinceVisit);
+            const stats = generateStatSnapshot(provinceSummary);
+            renderStatsCards(stats);
+            renderInsights(stats);
+            renderTable(provinceSummary);
+            updateStatChart(stats);
+            updateMap();
+            updateHeroChips();
+        }
+
+        function updateMap() {
+            if (!baseData) return;
+            const activeFriends = getActiveFriends();
+            const targetFeatures = currentMode === 'province' ? window._provinceFeatures : window._cityFeatures;
+            const mapName = currentMode === 'province' ? 'china_province' : 'china_city';
+            let data = [];
+
+            const activeFilter = selectedCounts.size ? selectedCounts : null;
+            if (currentMode === 'province') {
+                targetFeatures.forEach(feature => {
+                    const name = feature.properties && feature.properties.name;
+                    const visits = provinceVisit[name] || emptyVisitRecord();
+                    const count = activeFriends.reduce((total, friend) => total + (visits[friend] ? 1 : 0), 0);
+                    const filteredOut = activeFilter ? !activeFilter.has(count) : false;
+                    data.push({
+                        name,
+                        value: count,
+                        visits,
+                        itemStyle: {
+                            areaColor: colorForVisits(visits, activeFriends),
+                            opacity: filteredOut ? 0.15 : 1
+                        }
+                    });
+                });
+            } else {
+                targetFeatures.forEach(feature => {
+                    const name = feature.properties && feature.properties.name;
+                    const visits = baseData[name] || emptyVisitRecord();
+                    const count = activeFriends.reduce((total, friend) => total + (visits[friend] ? 1 : 0), 0);
+                    const filteredOut = activeFilter ? !activeFilter.has(count) : false;
+                    data.push({
+                        name,
+                        value: count,
+                        visits,
+                        itemStyle: {
+                            areaColor: colorForVisits(visits, activeFriends),
+                            opacity: filteredOut ? 0.15 : 1
+                        }
+                    });
+                });
+            }
+
+            const series = [{
+                name: '旅行足迹',
+                type: 'map',
+                map: mapName,
+                roam: true,
+                zoom: 1.08,
+                layoutCenter: ['50%', '52%'],
+                layoutSize: '110%',
+                data,
+                label: { show: false },
+                emphasis: { label: { show: true, color: '#fff' } },
+                itemStyle: {
+                    areaColor: 'transparent',
+                    borderColor: 'rgba(58, 164, 255, 0.7)',
+                    borderWidth: 1.1
+                }
+            }];
+
+            if (currentMode === 'city') {
+                series.push({
+                    name: '省界',
+                    type: 'map',
+                    map: 'china_province',
+                    roam: false,
+                    silent: true,
+                    label: { show: false },
+                    itemStyle: { borderColor: 'rgba(255, 255, 255, 0.7)', areaColor: 'transparent', borderWidth: 1.6 }
+                });
+            }
+
+            const option = {
+                backgroundColor: 'transparent',
+                visualMap: null,
+                tooltip: {
+                    trigger: 'item',
+                    formatter: params => {
+                        const name = params.name;
+                        const visits = (params.data && params.data.visits) || {};
+                        const visitors = friends.filter(friend => visits[friend]);
+                        const filterNote = activeFilter && params.data && !activeFilter.has(params.data.value)
+                            ? '<br />不在过滤范围内'
+                            : '';
+                        const debugColor = colorForVisits(visits, activeFriends);
+                        const debugVisits = friends.map(friend => `${friend}:${visits[friend] ? 'Y' : 'N'}`).join(' ');
+                        return `${name}<br />${visitors.length ? visitors.join('、') : '暂无访问记录'}${filterNote}` +
+                            `<br /><span style="color:#7cff6b;">[DEBUG]</span> ${debugVisits}` +
+                            `<br /><span style="color:#7cff6b;">[DEBUG]</span> color: ${debugColor}`;
+                    }
+                },
+                series
+            };
+            chart.clear();
+            chart.setOption(option, true);
+        }
+
+        Promise.all([
+            fetch('cn_city.geojson').then(res => res.json()),
+            fetch('cn_province.geojson').then(res => res.json()),
+            fetch('visits.csv').then(res => res.text())
+        ]).then(([cityGeo, provinceGeo, csvText]) => {
+            const municipalityList = ['北京市', '天津市', '上海市', '重庆市', '香港特别行政区', '澳门特别行政区'];
+            const cityFeatures = cityGeo.features.filter(feature => {
+                const level = feature.properties && feature.properties.level;
+                return level === 'city';
+            });
+            const municipalityFeatures = provinceGeo.features.filter(feature => {
+                const name = feature.properties && feature.properties.name;
+                return municipalityList.includes(name);
+            });
+            const filteredCityGeo = {
+                ...cityGeo,
+                features: [...cityFeatures, ...municipalityFeatures]
+            };
+            echarts.registerMap('china_city', filteredCityGeo);
+            echarts.registerMap('china_province', provinceGeo);
+            window._allFeatures = cityGeo.features;
+            window._cityFeatures = filteredCityGeo.features;
+            window._provinceFeatures = provinceGeo.features;
+            const visitData = parseCSV(csvText);
+            buildMapData(visitData);
+        }).catch(err => {
+            console.error('加载失败', err);
+        });
+
+        window.addEventListener('resize', () => {
+            chart.resize();
+            statChart.resize();
+        });
+    </script>
+</body>
+</html>
