@@ -276,10 +276,11 @@
             padding: 12px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(255, 255, 255, 0.02);
+            min-height: 300px;
         }
         #statChart {
             width: 100%;
-            height: 220px;
+            height: 280px;
         }
         .insight-card {
             border-radius: 16px;
@@ -343,12 +344,17 @@
         }
         .table-row {
             display: grid;
-            grid-template-columns: 2fr 1fr 3fr;
             gap: 12px;
             padding: 10px 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
             font-size: 0.9rem;
             color: var(--text-subtle);
+        }
+        .table-row.table-row--province {
+            grid-template-columns: 2fr 1fr 3fr;
+        }
+        .table-row.table-row--city {
+            grid-template-columns: 1.7fr 1.2fr 0.8fr 3fr;
         }
         .table-row:last-child {
             border-bottom: none;
@@ -358,6 +364,24 @@
             text-transform: uppercase;
             letter-spacing: 0.08em;
             font-size: 0.75rem;
+        }
+        .sort-btn {
+            background: none;
+            border: none;
+            padding: 0;
+            margin: 0;
+            color: inherit;
+            font: inherit;
+            letter-spacing: inherit;
+            text-transform: inherit;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: color 0.2s ease;
+        }
+        .sort-btn:hover {
+            color: var(--accent);
         }
         .table-row .province-name {
             font-weight: 600;
@@ -432,28 +456,28 @@
                 </div>
                 <div class="stat-grid">
                     <article class="stat-card">
-                        <div class="label">跨越省份</div>
+                        <div class="label" id="labelTotal">覆盖省份</div>
                         <div class="value" data-stat="totalProvinces">0</div>
-                        <div class="hint">整体覆盖的省级单位数量</div>
+                        <div class="hint" id="hintTotal">整体覆盖的数量</div>
                     </article>
                     <article class="stat-card">
-                        <div class="label">重合省份</div>
+                        <div class="label" id="labelShared">重合省份</div>
                         <div class="value" data-stat="sharedProvinces">0</div>
-                        <div class="hint">被 2 位及以上朋友踩过</div>
+                        <div class="hint" id="hintShared"> 两人以上去过 </div>
                     </article>
                     <article class="stat-card">
-                        <div class="label">头号出行家</div>
-                        <div class="value" data-stat="topFriend">-</div>
-                        <div class="hint">访问省份数最多的朋友</div>
-                    </article>
-                    <article class="stat-card">
-                        <div class="label">独行省份</div>
+                        <div class="label" id="labelLonely">独行省份</div>
                         <div class="value" data-stat="lonelyProvinces">0</div>
-                        <div class="hint">仅 1 位朋友独占的省份</div>
+                        <div class="hint" id="hintLonely">仅一人去过的省份</div>
+                    </article>
+                    <article class="stat-card">
+                        <div class="label" id="labelTop">头号出行家</div>
+                        <div class="value" data-stat="topFriend">-</div>
+                        <div class="hint" id="hintTop">访问省份数最多的朋友</div>
                     </article>
                 </div>
                 <div class="chart-card">
-                    <h3 style="margin:0 0 10px;font-size:0.9rem;letter-spacing:0.08em;">每位朋友覆盖省份</h3>
+                    <h3 id="chartTitle" style="margin:0 0 10px;font-size:0.9rem;letter-spacing:0.08em;">每位朋友覆盖省份</h3>
                     <div id="statChart"></div>
                 </div>
                 <div class="insight-card">
@@ -482,9 +506,15 @@
         const friends = Object.keys(friendMeta);
         let baseData = null;
         let provinceVisit = {};
-        let provinceSummary = [];
+        let summaryByMode = { city: [], province: [] };
+        let cityToProvince = {};
         let currentMode = 'city';
+        let currentMapMode = 'city';
         let selectedCounts = new Set([0, 1, 2, 3, 4]);
+        const tableSortState = {
+            city: { key: 'count', dir: 'desc' },
+            province: { key: 'count', dir: 'desc' }
+        };
 
         const chart = echarts.init(document.getElementById('main'));
         const statChart = echarts.init(document.getElementById('statChart'));
@@ -511,7 +541,11 @@
         const friendInputs = friendToggleContainer.querySelectorAll('.friend-toggle');
 
         modeButtons.forEach(btn => btn.addEventListener('click', () => {
-            currentMode = btn.dataset.mode;
+            const mode = btn.dataset.mode;
+            currentMode = mode;
+            if (mode !== 'table') {
+                currentMapMode = mode;
+            }
             modeButtons.forEach(b => b.classList.toggle('active', b === btn));
             switchView();
         }));
@@ -520,6 +554,7 @@
             input.addEventListener('change', () => {
                 const label = input.closest('.friend-chip');
                 if (label) label.classList.toggle('is-active', input.checked);
+                updateDashboard();
                 updateMap();
                 updateHeroChips();
             });
@@ -535,8 +570,25 @@
                     selectedCounts.add(count);
                     button.classList.add('active');
                 }
+                updateDashboard();
                 updateMap();
             });
+        });
+
+        tableElement.addEventListener('click', event => {
+            const button = event.target.closest('[data-sort]');
+            if (!button) return;
+            const key = button.dataset.sort;
+            const mode = getCurrentDataMode();
+            const state = tableSortState[mode];
+            if (!state) return;
+            if (state.key === key) {
+                state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                state.key = key;
+                state.dir = key === 'count' ? 'desc' : 'asc';
+            }
+            renderTable(summaryByMode[mode] || [], mode);
         });
 
         function getActiveFriends() {
@@ -556,10 +608,56 @@
             }).join('');
         }
 
+        function getCurrentDataMode() {
+            return currentMapMode;
+        }
+
+        function updateModeText(mode) {
+            const cityMode = mode !== 'province';
+            const totalLabel = document.getElementById('labelTotal');
+            const sharedLabel = document.getElementById('labelShared');
+            const topHint = document.getElementById('hintTop');
+            const lonelyLabel = document.getElementById('labelLonely');
+            const lonelyHint = document.getElementById('hintLonely');
+            const title = document.getElementById('chartTitle');
+            const tableTitle = document.querySelector('.province-table h2');
+
+            if (cityMode) {
+                totalLabel.textContent = '跨越城市';
+                sharedLabel.textContent = '重合城市';
+                topHint.textContent = '访问城市数最多的朋友';
+                lonelyLabel.textContent = '独行城市';
+                lonelyHint.textContent = '仅一人去过的城市';
+                title.textContent = '每位朋友覆盖地级市';
+                if (tableTitle) tableTitle.textContent = '城市访问矩阵';
+            } else {
+                totalLabel.textContent = '跨越省份';
+                sharedLabel.textContent = '重合省份';
+                topHint.textContent = '访问省份数最多的朋友';
+                lonelyLabel.textContent = '独行省份';
+                lonelyHint.textContent = '仅一人去过的省份';
+                title.textContent = '每位朋友覆盖省份';
+                if (tableTitle) tableTitle.textContent = '省份访问矩阵';
+            }
+        }
+
+        function updateDashboard() {
+            if (!baseData) return;
+            const mode = getCurrentDataMode();
+            const summary = summaryByMode[mode] || [];
+            const stats = generateStatSnapshot(summary);
+            updateModeText(mode);
+            renderStatsCards(stats, mode);
+            renderInsights(stats, mode);
+            renderTable(summary, mode);
+            updateStatChart(stats, mode);
+        }
+
         function switchView() {
             const isTable = currentMode === 'table';
             tableSection.style.display = isTable ? 'block' : 'none';
             mapPanel.style.display = isTable ? 'none' : 'block';
+            updateDashboard();
             if (!isTable) {
                 updateMap();
             }
@@ -630,6 +728,36 @@
             return prov;
         }
 
+        function buildCityToProvinceMap(cityFeatures, provinceFeatures) {
+            const codeToProv = {};
+            const provinceNames = new Set();
+            (provinceFeatures || []).forEach(feature => {
+                const properties = feature.properties || {};
+                if (properties.adcode && properties.name) {
+                    const key = Math.floor(properties.adcode / 10000) * 10000;
+                    codeToProv[key] = properties.name;
+                    provinceNames.add(properties.name);
+                }
+            });
+            const map = {};
+            (cityFeatures || []).forEach(feature => {
+                const properties = feature.properties || {};
+                const name = properties.name;
+                const adcode = properties.adcode;
+                if (!name) return;
+                let province = '';
+                if (adcode) {
+                    const key = Math.floor(adcode / 10000) * 10000;
+                    province = codeToProv[key];
+                }
+                if (!province && provinceNames.has(name)) {
+                    province = name;
+                }
+                map[name] = province || '—';
+            });
+            return map;
+        }
+
         function emptyVisitRecord() {
             return friends.reduce((acc, friend) => {
                 acc[friend] = false;
@@ -663,9 +791,12 @@
             return mixColors(visited.map(friend => friendMeta[friend].color));
         }
 
-        function aggregateProvinceSummary(provinces) {
+        function buildSummary(visitsByName, features) {
             const summary = [];
-            Object.entries(provinces).forEach(([name, visits]) => {
+            (features || []).forEach(feature => {
+                const name = feature.properties && feature.properties.name;
+                if (!name) return;
+                const visits = visitsByName[name] || emptyVisitRecord();
                 const visitors = friends.filter(friend => visits[friend]);
                 if (!visitors.length) return;
                 summary.push({ name, count: visitors.length, friends: visitors });
@@ -700,7 +831,8 @@
             };
         }
 
-        function renderStatsCards(stats) {
+        function renderStatsCards(stats, mode = 'province') {
+            const unit = mode === 'province' ? '省' : '市';
             const setValue = (key, value) => {
                 const el = document.querySelector(`[data-stat="${key}"]`);
                 if (el) el.textContent = value;
@@ -708,14 +840,16 @@
             setValue('totalProvinces', stats.totalProvinces);
             setValue('sharedProvinces', stats.sharedCount);
             setValue('lonelyProvinces', stats.lonelyCount);
-            setValue('topFriend', `${stats.topFriend.friend} · ${stats.topFriend.count} 省`);
+            setValue('topFriend', `${stats.topFriend.friend} · ${stats.topFriend.count} ${unit}`);
         }
 
-        function renderInsights(stats) {
+        function renderInsights(stats, mode = 'province') {
             const container = document.getElementById('insightList');
             const summary = document.getElementById('insightSummary');
-            const lonelyText = stats.lonelyNames.length ? stats.lonelyNames.slice(0, 2).join(' / ') : '暂无独行省份';
-            summary.innerHTML = `共有 <strong>${stats.sharedCount}</strong> 个省份被至少 2 位朋友共同造访，${lonelyText}`;
+            const modeLabel = mode === 'province' ? '省份' : '地级市';
+            const lonelyLabel = mode === 'province' ? '独行省份' : '独行城市';
+            const lonelyText = stats.lonelyNames.length ? stats.lonelyNames.slice(0, 2).join(' / ') : `暂无${lonelyLabel}`;
+            summary.innerHTML = `共有 <strong>${stats.sharedCount}</strong> 个${modeLabel}被至少 2 位朋友共同造访，${lonelyText}`;
             if (!stats.topShared.length) {
                 container.innerHTML = '<p style="color: var(--text-subtle);">暂无数据。</p>';
                 return;
@@ -733,39 +867,64 @@
             }).join('');
         }
 
-        function renderTable(summary) {
-            const sorted = [...summary].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-CN'));
+        function renderTable(summary, mode = 'province') {
+            const withProvince = mode === 'city';
+            const state = tableSortState[mode] || { key: 'count', dir: 'desc' };
+            const enriched = summary.map(item => ({
+                ...item,
+                province: withProvince ? (cityToProvince[item.name] || '—') : null
+            }));
+            const sorted = [...enriched].sort((a, b) => {
+                const dir = state.dir === 'asc' ? 1 : -1;
+                if (state.key === 'count') {
+                    const diff = (a.count - b.count) * dir;
+                    return diff || a.name.localeCompare(b.name, 'zh-CN');
+                }
+                if (state.key === 'province' && withProvince) {
+                    const diff = (a.province || '').localeCompare(b.province || '', 'zh-CN') * dir;
+                    return diff || a.name.localeCompare(b.name, 'zh-CN');
+                }
+                const diff = a.name.localeCompare(b.name, 'zh-CN') * dir;
+                return diff || b.count - a.count;
+            });
             if (!sorted.length) {
                 tableElement.innerHTML = '<p style="color: var(--text-subtle);">暂无有效数据。</p>';
                 return;
             }
             const rows = sorted.map(item => {
                 const friendTags = item.friends.map(friend => `<span class="tag">${friend}</span>`).join('');
-                return `<div class="table-row">
+                return `<div class="table-row ${withProvince ? 'table-row--city' : 'table-row--province'}">
                     <div class="province-name">${item.name}</div>
+                    ${withProvince ? `<div>${item.province}</div>` : ''}
                     <div>${item.count}</div>
                     <div>${friendTags}</div>
                 </div>`;
             }).join('');
+            const header = mode === 'province' ? '省份 / 直辖市' : '地级市';
+            const nameLabel = state.key === 'name' ? `${header} ${state.dir === 'asc' ? '↑' : '↓'}` : header;
+            const countLabel = state.key === 'count' ? `人数 ${state.dir === 'asc' ? '↑' : '↓'}` : '人数';
+            const provinceLabel = state.key === 'province' ? `省份 ${state.dir === 'asc' ? '↑' : '↓'}` : '省份';
             tableElement.innerHTML = `
                 <div class="table-grid">
-                    <div class="table-row table-head">
-                        <div>省份 / 直辖市</div>
-                        <div>人数</div>
+                    <div class="table-row table-head ${withProvince ? 'table-row--city' : 'table-row--province'}">
+                        <div><button class="sort-btn" data-sort="name">${nameLabel}</button></div>
+                        ${withProvince ? `<div><button class="sort-btn" data-sort="province">${provinceLabel}</button></div>` : ''}
+                        <div><button class="sort-btn" data-sort="count">${countLabel}</button></div>
                         <div>朋友</div>
                     </div>
                     ${rows}
                 </div>`;
         }
 
-        function updateStatChart(stats) {
+        function updateStatChart(stats, mode = 'province') {
+            const unit = mode === 'province' ? '省级单位' : '地级市';
             statChart.setOption({
                 tooltip: {
                     trigger: 'axis',
                     axisPointer: { type: 'shadow' },
                     formatter: params => {
                         const item = params[0];
-                        return `${item.name}<br/>${item.value} 省级单位`;
+                        return `${item.name}<br/>${item.value} ${unit}`;
                     }
                 },
                 grid: { left: 0, right: 12, bottom: 14, top: 20 },
@@ -782,7 +941,7 @@
                     axisLabel: { color: 'rgba(255, 255, 255, 0.7)' }
                 },
                 series: [{
-                    name: '覆盖省份',
+                    name: mode === 'province' ? '覆盖省份' : '覆盖城市',
                     type: 'bar',
                     data: stats.friendRanking.map(item => ({
                         value: item.count,
@@ -809,12 +968,11 @@
         function buildMapData(data) {
             baseData = data;
             provinceVisit = computeProvinceVisits(data);
-            provinceSummary = aggregateProvinceSummary(provinceVisit);
-            const stats = generateStatSnapshot(provinceSummary);
-            renderStatsCards(stats);
-            renderInsights(stats);
-            renderTable(provinceSummary);
-            updateStatChart(stats);
+            summaryByMode = {
+                city: buildSummary(baseData, window._cityFeatures),
+                province: buildSummary(provinceVisit, window._provinceFeatures)
+            };
+            updateDashboard();
             updateMap();
             updateHeroChips();
         }
@@ -822,12 +980,13 @@
         function updateMap() {
             if (!baseData) return;
             const activeFriends = getActiveFriends();
-            const targetFeatures = currentMode === 'province' ? window._provinceFeatures : window._cityFeatures;
-            const mapName = currentMode === 'province' ? 'china_province' : 'china_city';
+            const mapMode = getCurrentDataMode();
+            const targetFeatures = mapMode === 'province' ? window._provinceFeatures : window._cityFeatures;
+            const mapName = mapMode === 'province' ? 'china_province' : 'china_city';
             let data = [];
 
             const activeFilter = selectedCounts.size ? selectedCounts : null;
-            if (currentMode === 'province') {
+            if (mapMode === 'province') {
                 targetFeatures.forEach(feature => {
                     const name = feature.properties && feature.properties.name;
                     const visits = provinceVisit[name] || emptyVisitRecord();
@@ -879,17 +1038,7 @@
                 }
             }];
 
-            if (currentMode === 'city') {
-                series.push({
-                    name: '省界',
-                    type: 'map',
-                    map: 'china_province',
-                    roam: false,
-                    silent: true,
-                    label: { show: false },
-                    itemStyle: { borderColor: 'rgba(255, 255, 255, 0.7)', areaColor: 'transparent', borderWidth: 1.6 }
-                });
-            }
+            // 已按需去除地级市视图中的省界白色描边叠层。
 
             const option = {
                 backgroundColor: 'transparent',
@@ -903,11 +1052,9 @@
                         const filterNote = activeFilter && params.data && !activeFilter.has(params.data.value)
                             ? '<br />不在过滤范围内'
                             : '';
-                        const debugColor = colorForVisits(visits, activeFriends);
-                        const debugVisits = friends.map(friend => `${friend}:${visits[friend] ? 'Y' : 'N'}`).join(' ');
-                        return `${name}<br />${visitors.length ? visitors.join('、') : '暂无访问记录'}${filterNote}` +
-                            `<br /><span style="color:#7cff6b;">[DEBUG]</span> ${debugVisits}` +
-                            `<br /><span style="color:#7cff6b;">[DEBUG]</span> color: ${debugColor}`;
+                        // const debugColor = colorForVisits(visits, activeFriends);
+                        // const debugVisits = friends.map(friend => `${friend}:${visits[friend] ? 'Y' : 'N'}`).join(' ');
+                        return `${name}<br />${visitors.length ? visitors.join(', ') : '暂无访问记录'}${filterNote}` ;
                     }
                 },
                 series
@@ -939,6 +1086,7 @@
             window._allFeatures = cityGeo.features;
             window._cityFeatures = filteredCityGeo.features;
             window._provinceFeatures = provinceGeo.features;
+            cityToProvince = buildCityToProvinceMap(window._cityFeatures, window._provinceFeatures);
             const visitData = parseCSV(csvText);
             buildMapData(visitData);
         }).catch(err => {
