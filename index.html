@@ -464,7 +464,7 @@
                 </div>
                 <div id="main"></div>
             </article>
-            <article class="panel">
+            <article class="panel" id="statsPanel">
                 <div class="panel-title">
                     <h2>足迹统计 👣</h2>
                     <!-- <span class="tag">insights V2</span> -->
@@ -502,14 +502,14 @@
                 </div> -->
             </article>
         </section>
-        <section class="panel coverage-panel" id="coverageCard" style="display:none;">
-            <div class="panel-title">
-                <h2>省级覆盖率对比（城市维度）</h2>
-                <span class="tag">覆盖/重合</span>
-            </div>
-            <div id="provinceCoverageChart"></div>
-        </section>
         <section class="table-section" id="tableSection" style="display:none;">
+            <section class="panel coverage-panel" id="coverageCard" style="display:none;">
+                <div class="panel-title">
+                    <h2>省级覆盖率对比（城市维度）</h2>
+                    <span class="tag">覆盖/重合</span>
+                </div>
+                <div id="provinceCoverageChart"></div>
+            </section>
             <div class="panel province-table">
                 <div class="panel-title">
                     <h2>省份访问矩阵</h2>
@@ -549,6 +549,7 @@
         const coverageChart = echarts.init(document.getElementById('provinceCoverageChart'));
         const modeButtons = document.querySelectorAll('[data-mode]');
         const mapPanel = document.querySelector('.map-panel');
+        const statsPanel = document.getElementById('statsPanel');
         const tableSection = document.getElementById('tableSection');
         const tableElement = document.getElementById('table');
         const heroChips = document.getElementById('heroChips');
@@ -683,7 +684,7 @@
             renderTable(summary, mode);
             updateStatChart(stats, mode);
             if (coverageCard) {
-                coverageCard.style.display = mode === 'city' && currentMode !== 'table' ? 'block' : 'none';
+                coverageCard.style.display = mode === 'city' && currentMode === 'table' ? 'block' : 'none';
             }
             if (mode === 'city') {
                 updateProvinceCoverageChart();
@@ -694,6 +695,9 @@
             const isTable = currentMode === 'table';
             tableSection.style.display = isTable ? 'block' : 'none';
             mapPanel.style.display = isTable ? 'none' : 'block';
+            if (statsPanel) {
+                statsPanel.style.display = isTable ? 'none' : 'block';
+            }
             updateDashboard();
             if (!isTable) {
                 updateMap();
