@@ -412,18 +412,87 @@
             background: rgba(255, 255, 255, 0.05);
             margin-right: 6px;
         }
-        @media (max-width: 768px) {
+        /* ── Tablet (601px – 900px) ── */
+        @media (max-width: 900px) {
+            #main {
+                height: 60vh;
+            }
+            .map-panel {
+                min-height: 0;
+            }
+        }
+
+        /* ── Mobile (≤ 600px) ── */
+        @media (max-width: 600px) {
             body {
                 padding-bottom: 40px;
             }
             .page {
-                padding: 18px;
+                padding: 12px;
+            }
+            .hero-panel {
+                gap: 10px;
+            }
+            .hero-panel h1 {
+                font-size: clamp(1.15rem, 5vw, 1.5rem);
+                letter-spacing: 0.04em;
+            }
+            .hero-controls {
+                min-width: 0;
+                width: 100%;
+            }
+            .mode-switch button {
+                flex: 1;
+                padding: 6px 8px;
+                font-size: 0.82rem;
+            }
+            .count-filter button {
+                padding: 5px 10px;
+                font-size: 0.75rem;
+            }
+            .panel {
+                padding: 12px;
+            }
+            .map-panel {
+                min-height: 0;
+                padding: 8px;
+            }
+            #main {
+                height: 52vh;
+                min-height: 260px;
             }
             .stat-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .stat-card {
+                padding: 12px;
+            }
+            .stat-card .value {
+                font-size: 1.4rem;
+                margin-top: 6px;
+            }
+            .stat-card .value .stat-sub {
+                font-size: 0.75rem;
+            }
+            .chart-card {
+                min-height: 180px;
+                padding: 10px;
+            }
+            #statChart {
+                height: 180px;
             }
             .table-row {
                 grid-template-columns: 1fr;
+                gap: 4px;
+            }
+            .province-table {
+                padding: 10px;
+            }
+            .panel-title h2 {
+                font-size: 0.95rem;
+            }
+            .filter-title {
+                font-size: 0.7rem;
             }
         }
     </style>
@@ -517,6 +586,13 @@
                 </div>
                 <div id="table"></div>
             </div>
+            <div class="panel province-table" style="margin-top:24px;">
+                <div class="panel-title">
+                    <h2>城市访问矩阵</h2>
+                    <span class="tag">清单视图</span>
+                </div>
+                <div id="cityTable"></div>
+            </div>
         </section>
     </div>
     <script>
@@ -552,6 +628,7 @@
         const statsPanel = document.getElementById('statsPanel');
         const tableSection = document.getElementById('tableSection');
         const tableElement = document.getElementById('table');
+        const cityTableElement = document.getElementById('cityTable');
         const heroChips = document.getElementById('heroChips');
         const friendToggleContainer = document.getElementById('friendToggles');
         const countButtons = document.querySelectorAll('.count-filter button');
@@ -610,16 +687,28 @@
             const button = event.target.closest('[data-sort]');
             if (!button) return;
             const key = button.dataset.sort;
-            const mode = getCurrentDataMode();
-            const state = tableSortState[mode];
-            if (!state) return;
+            const state = tableSortState['province'];
             if (state.key === key) {
                 state.dir = state.dir === 'asc' ? 'desc' : 'asc';
             } else {
                 state.key = key;
                 state.dir = key === 'count' ? 'desc' : 'asc';
             }
-            renderTable(summaryByMode[mode] || [], mode);
+            renderTable(summaryByMode['province'] || [], 'province', tableElement);
+        });
+
+        cityTableElement.addEventListener('click', event => {
+            const button = event.target.closest('[data-sort]');
+            if (!button) return;
+            const key = button.dataset.sort;
+            const state = tableSortState['city'];
+            if (state.key === key) {
+                state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                state.key = key;
+                state.dir = key === 'count' ? 'desc' : 'asc';
+            }
+            renderTable(summaryByMode['city'] || [], 'city', cityTableElement);
         });
 
         function getActiveFriends() {
@@ -652,7 +741,6 @@
             const lonelyLabel = document.getElementById('labelLonely');
             const lonelyHint = document.getElementById('hintLonely');
             const title = document.getElementById('chartTitle');
-            const tableTitle = document.querySelector('.province-table h2');
 
             if (cityMode) {
                 totalLabel.textContent = '跨越城市';
@@ -661,7 +749,6 @@
                 lonelyLabel.textContent = '独行城市';
                 lonelyHint.textContent = '仅一🐧去过的城市';
                 title.textContent = '每只企鹅覆盖城市';
-                if (tableTitle) tableTitle.textContent = '城市访问矩阵';
             } else {
                 totalLabel.textContent = '跨越省份';
                 sharedLabel.textContent = '重合省份';
@@ -669,7 +756,6 @@
                 lonelyLabel.textContent = '独行省份';
                 lonelyHint.textContent = '仅一🐧去过的省份';
                 title.textContent = '每只企鹅覆盖省份';
-                if (tableTitle) tableTitle.textContent = '省份访问矩阵';
             }
         }
 
@@ -681,13 +767,14 @@
             updateModeText(mode);
             renderStatsCards(stats, mode);
             renderInsights(stats, mode);
-            renderTable(summary, mode);
             updateStatChart(stats, mode);
-            if (coverageCard) {
-                coverageCard.style.display = mode === 'city' && currentMode === 'table' ? 'block' : 'none';
-            }
-            if (mode === 'city') {
+            if (currentMode === 'table') {
+                renderTable(summaryByMode['province'] || [], 'province', tableElement);
+                renderTable(summaryByMode['city'] || [], 'city', cityTableElement);
+                if (coverageCard) coverageCard.style.display = 'block';
                 updateProvinceCoverageChart();
+            } else {
+                if (coverageCard) coverageCard.style.display = 'none';
             }
         }
 
@@ -962,7 +1049,7 @@
             // }).join('');
         }
 
-        function renderTable(summary, mode = 'province') {
+        function renderTable(summary, mode = 'province', targetEl = tableElement) {
             const withProvince = mode === 'city';
             const state = tableSortState[mode] || { key: 'count', dir: 'desc' };
             const enriched = summary.map(item => ({
@@ -983,7 +1070,7 @@
                 return diff || b.count - a.count;
             });
             if (!sorted.length) {
-                tableElement.innerHTML = '<p style="color: var(--text-subtle);">暂无有效数据。</p>';
+                targetEl.innerHTML = '<p style="color: var(--text-subtle);">暂无有效数据。</p>';
                 return;
             }
             const rows = sorted.map(item => {
@@ -999,7 +1086,7 @@
             const nameLabel = state.key === 'name' ? `${header} ${state.dir === 'asc' ? '↑' : '↓'}` : header;
             const countLabel = state.key === 'count' ? `🐧数 ${state.dir === 'asc' ? '↑' : '↓'}` : '🐧数';
             const provinceLabel = state.key === 'province' ? `省份 ${state.dir === 'asc' ? '↑' : '↓'}` : '省份';
-            tableElement.innerHTML = `
+            targetEl.innerHTML = `
                 <div class="table-grid">
                     <div class="table-row table-head ${withProvince ? 'table-row--city' : 'table-row--province'}">
                         <div><button class="sort-btn" data-sort="name">${nameLabel}</button></div>
